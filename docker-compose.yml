@@ -1,0 +1,16 @@
+services:
+  buyback-scout:
+    image: ghcr.io/your-username/buyback-scout:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"   # remove this when using a reverse proxy
+    networks:
+      - caddy-net
+    # Caddy reverse proxy labels (remove if not using caddy-docker-proxy)
+    labels:
+      caddy: buyback-scout.yourdomain.com
+      caddy.reverse_proxy: "{{upstreams 3000}}"
+
+networks:
+  caddy-net:
+    external: true

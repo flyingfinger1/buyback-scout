@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Buchscanner</title>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0f0f1a;
+            color: #eee;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px;
+            gap: 12px;
+        }
+
+        h1 { font-size: 1.4rem; margin-top: 8px; letter-spacing: 1px; }
+
+        /* Scanner container */
+        #reader {
+            width: 100%;
+            max-width: 420px;
+            border-radius: 14px;
+            overflow: hidden;
+            display: none;
+        }
+
+        /* html5-qrcode interne Elemente anpassen */
+        #reader video { border-radius: 14px; }
+        #reader img { display: none !important; }
+        #reader__dashboard { display: none !important; }
+
+        /* Buttons */
+        .btn-primary {
+            width: 100%;
+            max-width: 420px;
+            padding: 13px;
+            background: #00e87a;
+            color: #0f0f1a;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: opacity 0.15s;
+        }
+        .btn-primary:active { opacity: 0.75; }
+
+        /* Einkaufspreis */
+        .row-label {
+            width: 100%;
+            max-width: 420px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .row-label label { color: #aaa; font-size: 0.9rem; white-space: nowrap; }
+        .row-label input {
+            width: 90px;
+            padding: 9px 10px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            background: #1e1e30;
+            color: #eee;
+            font-size: 1rem;
+            text-align: center;
+        }
+
+        /* Manual ISBN */
+        .isbn-row {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+            max-width: 420px;
+        }
+        .isbn-row input {
+            flex: 1;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            background: #1e1e30;
+            color: #eee;
+            font-size: 1rem;
+        }
+        .isbn-row button {
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: none;
+            background: #333;
+            color: #eee;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .isbn-row button:active { opacity: 0.7; }
+
+        /* Status */
+        #status {
+            font-size: 0.9rem;
+            color: #aaa;
+            text-align: center;
+            min-height: 1.2em;
+        }
+        #status.loading { color: #ffb347; }
+        #status.error   { color: #ff5555; }
+
+        /* Result card */
+        .card {
+            width: 100%;
+            max-width: 420px;
+            background: #1e1e30;
+            border-radius: 14px;
+            padding: 16px;
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #eee;
+            margin-bottom: 4px;
+        }
+
+        .card-isbn {
+            font-size: 0.78rem;
+            color: #666;
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        .price-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #2a2a40;
+        }
+        .price-row:last-of-type { border-bottom: none; }
+
+        .site-name { font-weight: 600; font-size: 0.95rem; }
+
+        .price { font-size: 1.2rem; font-weight: 700; }
+        .price.good    { color: #00e87a; }
+        .price.bad     { color: #ff5555; }
+        .price.na      { color: #555; font-size: 0.9rem; font-weight: 400; }
+
+        .verdict {
+            margin-top: 14px;
+            padding: 12px 16px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 1.05rem;
+        }
+        .verdict.yes { background: #00e87a22; color: #00e87a; border: 1px solid #00e87a55; }
+        .verdict.no  { background: #ff555522; color: #ff5555; border: 1px solid #ff555555; }
+
+        .cors-hint {
+            margin-top: 12px;
+            padding: 10px 14px;
+            background: #ff990015;
+            border: 1px solid #ff990055;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            color: #ffaa55;
+            line-height: 1.4;
+        }
+
+        /* Bonavendi mehr-Angebote */
+        .more-offers-toggle {
+            margin-top: 12px;
+            background: none;
+            border: 1px solid #333;
+            color: #aaa;
+            width: 100%;
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+        .more-offers-toggle:active { opacity: 0.7; }
+
+        .more-offers-list { margin-top: 8px; }
+        .more-offers-list .price-row { font-size: 0.9rem; }
+        .more-offers-list .price-row .price { font-size: 1rem; }
+    </style>
+</head>
+<body>
+
+    <h1>Buchscanner</h1>
+
+    <div id="_offscreen" style="display:none"></div>
+    <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none">
+
+    <button class="btn-primary" id="start-btn">Barcode fotografieren</button>
+
+    <div class="row-label">
+        <label>Mein Einkaufspreis (€):</label>
+        <input type="number" id="buy-price" value="1.00" min="0" step="0.50">
+    </div>
+
+    <div class="isbn-row">
+        <input type="text" id="isbn-input" placeholder="ISBN manuell eingeben..." inputmode="numeric" maxlength="13">
+        <button id="isbn-btn">Suchen</button>
+    </div>
+
+    <div id="status"></div>
+    <div id="results"></div>
+
+    <script>
+        const startBtn   = document.getElementById('start-btn');
+        const statusEl   = document.getElementById('status');
+        const resultsEl  = document.getElementById('results');
+        const isbnInput  = document.getElementById('isbn-input');
+        const photoInput = document.getElementById('photo-input');
+
+        // ── Photo scan ───────────────────────────────────────────
+
+        startBtn.addEventListener('click', () => photoInput.click());
+
+        photoInput.addEventListener('change', async () => {
+            const file = photoInput.files[0];
+            if (!file) return;
+            photoInput.value = ''; // reset so the same file can be selected again
+
+            setStatus('Barcode wird erkannt...', 'loading');
+            resultsEl.innerHTML = '';
+
+            try {
+                const scanner = new Html5Qrcode('_offscreen', { verbose: false });
+                const result  = await scanner.scanFileV2(file, false);
+                const digits  = result.decodedText.replace(/\D/g, '');
+
+                if (!digits.startsWith('978') && !digits.startsWith('979')) {
+                    setStatus('Kein Buch-Barcode erkannt (ISBN beginnt mit 978/979). Bitte nochmal versuchen.', 'error');
+                    return;
+                }
+                handleISBN(digits);
+            } catch {
+                setStatus('Barcode nicht erkannt — bitte schärfer und näher fotografieren.', 'error');
+            }
+        });
+
+        // ── Lookups ──────────────────────────────────────────────────────────────
+
+        async function handleISBN(isbn) {
+            isbn = isbn.replace(/\D/g, '');
+            if (isbn.length < 10) { setStatus('Ungültige ISBN', 'error'); return; }
+
+            setStatus('Preise werden abgefragt...', 'loading');
+            resultsEl.innerHTML = '';
+
+            const [momox, rebuy, bonavendi] = await Promise.allSettled([
+                queryMomox(isbn),
+                queryRebuy(isbn),
+                queryBonavendi(isbn)
+            ]);
+
+            renderResults(isbn, momox, rebuy, bonavendi);
+        }
+
+        async function queryMomox(isbn) {
+            const res = await fetch(`/api/momox?ean=${isbn}`);
+            const json = await res.json();
+            if (json.status !== 'offer') return null;
+            return parseFloat(json.price);
+        }
+
+        async function queryBonavendi(isbn) {
+            const res = await fetch(`/api/bonavendi?ean=${isbn}`);
+            const json = await res.json();
+            return { offers: json.offers ?? [], title: json.title ?? null };
+        }
+
+        async function queryRebuy(isbn) {
+            const res = await fetch('/api/rebuy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ identifiers: isbn })
+            });
+            const json = await res.json();
+            for (const item of json.purchasable ?? []) {
+                const eans  = item.product?.identifiers_ean  ?? [];
+                const isbns = item.product?.identifiers_isbn ?? [];
+                if (eans.includes(isbn) || isbns.includes(isbn))
+                    return item.product.price_purchase / 100;
+            }
+            return null;
+        }
+
+        // ── Render ───────────────────────────────────────────────────────────────
+
+        function renderResults(isbn, momoxSettled, rebuySettled, bvSettled) {
+            const buyPrice    = parseFloat(document.getElementById('buy-price').value) || 0;
+            const momoxPrice  = momoxSettled.status === 'fulfilled' ? momoxSettled.value : undefined;
+            const rebuyPrice  = rebuySettled.status === 'fulfilled' ? rebuySettled.value : undefined;
+            const bvData      = bvSettled?.status === 'fulfilled' ? bvSettled.value : {};
+            const bvOffers    = bvData.offers ?? [];
+            const bookTitle   = bvData.title ?? null;
+            const momoxErr    = momoxSettled.status === 'rejected';
+            const rebuyErr    = rebuySettled.status === 'rejected';
+
+            // Best price across all sources
+            const bvBest     = bvOffers.length ? bvOffers[0].price : null;
+            const prices     = [momoxPrice, rebuyPrice, bvBest].filter(p => p != null);
+            const bestPrice  = prices.length ? Math.max(...prices) : null;
+            const lohnt      = bestPrice !== null && bestPrice > buyPrice;
+
+            let html = `<div class="card">`;
+            if (bookTitle) html += `<div class="card-title">${bookTitle}</div>`;
+            html += `<div class="card-isbn">ISBN ${isbn}</div>`;
+            html += priceRow('Momox', momoxPrice, momoxErr, buyPrice);
+            html += priceRow('Rebuy', rebuyPrice, rebuyErr, buyPrice);
+
+            // Bonavendi best offer row (always shown)
+            const bvErr = bvSettled?.status === 'rejected';
+            if (bvBest !== null) {
+                html += priceRow(`${bvOffers[0].name} (via Bonavendi)`, bvBest, false, buyPrice);
+            } else {
+                html += priceRow('Bonavendi', null, bvErr, buyPrice);
+            }
+
+            if (bestPrice !== null) {
+                html += `<div class="verdict ${lohnt ? 'yes' : 'no'}">
+                    ${lohnt
+                        ? `Lohnt sich &mdash; bestes Angebot: ${fmt(bestPrice)}`
+                        : `Lohnt nicht &mdash; bestes Angebot: ${fmt(bestPrice)}`}
+                </div>`;
+            }
+
+            // Additional Bonavendi offers — collapsible
+            if (bvOffers.length > 1) {
+                html += `<button class="more-offers-toggle" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'; this.textContent=this.textContent.includes('▼')?'▲ Weniger':'▼ Alle ${bvOffers.length} Angebote (Bonavendi)'">▼ Alle ${bvOffers.length} Angebote (Bonavendi)</button>`;
+                html += `<div class="more-offers-list" style="display:none">`;
+                for (const o of bvOffers) {
+                    html += priceRow(o.name, o.price, false, buyPrice);
+                }
+                html += `</div>`;
+            }
+
+            if (momoxErr || rebuyErr) {
+                html += `<div class="cors-hint">
+                    Einige Anfragen schlugen fehl &mdash; wahrscheinlich CORS-Blockierung.
+                    Falls das dauerhaft passiert, brauchen wir einen kleinen Proxy-Server.
+                </div>`;
+            }
+
+            html += `</div>`;
+            resultsEl.innerHTML = html;
+            setStatus('', '');
+
+            startBtn.textContent = 'Nächstes Buch scannen';
+            startBtn.onclick = () => {
+                resultsEl.innerHTML = '';
+                startBtn.textContent = 'Barcode fotografieren';
+                startBtn.onclick = () => photoInput.click();
+                photoInput.click();
+            };
+        }
+
+        function priceRow(name, price, isError, buyPrice) {
+            let cls, text;
+            if (isError)           { cls = 'na';   text = 'Fehler'; }
+            else if (price == null){ cls = 'na';   text = 'kein Ankauf'; }
+            else if (price > buyPrice) { cls = 'good'; text = fmt(price); }
+            else                   { cls = 'bad';  text = fmt(price); }
+
+            return `<div class="price-row">
+                <span class="site-name">${name}</span>
+                <span class="price ${cls}">${text}</span>
+            </div>`;
+        }
+
+        function fmt(n) { return n.toFixed(2).replace('.', ',') + ' €'; }
+
+        function setStatus(msg, cls) {
+            statusEl.textContent = msg;
+            statusEl.className   = cls;
+        }
+
+        // ── Manual input ─────────────────────────────────────────────────────────
+
+        document.getElementById('isbn-btn').addEventListener('click', () =>
+            handleISBN(isbnInput.value));
+
+        isbnInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') handleISBN(isbnInput.value);
+        });
+    </script>
+
+</body>
+</html>
