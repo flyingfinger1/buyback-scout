@@ -1,5 +1,10 @@
 # buyback-scout
 
+[![GitHub release](https://img.shields.io/github/v/release/flyingfinger1/buyback-scout)](https://github.com/flyingfinger1/buyback-scout/releases)
+[![Docker Image](https://img.shields.io/badge/ghcr.io-buyback--scout-blue?logo=docker)](https://github.com/flyingfinger1/buyback-scout/pkgs/container/buyback-scout)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-no%20dependencies-green?logo=node.js)](server.js)
+
 A mobile-first web app that scans book barcodes and instantly compares buyback prices from multiple German recommerce platforms.
 
 ## What it does
